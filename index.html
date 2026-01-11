@@ -35,74 +35,138 @@
   th,td{border:1px solid #333;padding:6px 8px;text-align:center}
   th{background:#007bff;color:#fff}
   .overspeed{color: #ff0000; font-weight: bold; background-color: #ffeaea;}
+
+  /* --- Splash Screen Styles --- */
+  #splashScreen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(135deg, #8b0000 0%, #200000 100%);
+    color: #fff; z-index: 10000; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center;
+    transition: opacity 0.8s ease;
+  }
+  .splash-box {
+    border: 3px solid #FFD700; padding: 50px; border-radius: 20px;
+    background: rgba(0, 0, 0, 0.6); box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+  }
+  .splash-box h1 { color: #FFD700; font-size: 2.8em; margin-bottom: 5px; border-bottom: none; }
+  .splash-box h2 { font-size: 1.8em; margin: 5px 0; color: #fff; }
+  .splash-box h3 { font-size: 1.4em; color: #ccc; margin-bottom: 30px; }
+  .dev-credits { margin-top: 30px; font-size: 1.2em; border-top: 1px solid #555; padding-top: 20px; }
+  .dev-name { color: #FFD700; font-weight: bold; font-size: 1.3em; margin: 5px 0; }
+  #timerText { margin-top: 30px; font-size: 0.9em; color: #aaa; }
+  .skip-btn {
+    margin-top: 20px; background: #FFD700; color: #000; border: none;
+    padding: 10px 25px; font-weight: bold; border-radius: 5px; cursor: pointer;
+  }
+  #mainApp { display: none; } /* Hide main app initially */
 </style>
 </head>
 <body>
 
-<h1>Central Railway Electrical (TRO) Branch Bhusawal</h1>
-<h2>Speed vs Distance — Station-wise Braking Pattern</h2>
+<div id="splashScreen">
+  <div class="splash-box">
+    <h1>Braking Pattern Analysis Tool</h1>
+    <h2>Central Railway, Bhusawal Division</h2>
+    <h3>Electric (TRO) Branch</h3>
+    
+    <div class="dev-credits">
+      <p>Designed and Developed by:</p>
+      <p class="dev-name">T. M. Kulkarni, CLI/BSL</p>
+    </div>
 
-<div class="controls">
-  <div class="row">
-    <label>Select CSV files (max 20):</label>
-    <input type="file" id="csvFiles" accept=".csv" multiple />
-  </div>
-
-  <div class="row">
-    <label>Station & Direction:</label>
-    <select id="stationSelect">
-        <option value="">-- Select Station --</option>
-    </select>
-    <select id="dirSelect">
-        <option value="UP">UP</option>
-        <option value="DN">DN</option>
-    </select>
-  </div>
-
-  <div class="row">
-    <label>Backtrack Distance (m):</label>
-    <input type="number" id="backDistInput" placeholder="1500 or 1250" />
-  </div>
-
-  <div class="row">
-    <label>User Signal 1 (m & name):</label>
-    <input type="number" id="userSig1Dist" placeholder="e.g. 800">
-    <input type="text" id="userSig1Name" placeholder="Outer">
-  </div>
-
-  <div class="row">
-    <label>User Signal 2 (m & name):</label>
-    <input type="number" id="userSig2Dist" placeholder="e.g. 400">
-    <input type="text" id="userSig2Name" placeholder="Home">
-  </div>
-
-  <div class="row">
-    <label>Marker Lines (m):</label>
-    <input type="text" id="markerInput" value="750,500,250,110,20">
-  </div>
-
-  <div class="row">
-    <button id="plotBtn">Plot Graph & Table</button>
-    <button id="pdfBtn" class="secondary" style="background:#008000">Export PDF</button>
-    <button id="excelSummaryBtn" class="secondary" style="background:#6a00ff">Export Summary Excel</button>
+    <p id="timerText">The main interface will appear in <span id="seconds">30</span> seconds...</p>
+    <button class="skip-btn" onclick="hideSplash()">Enter Software</button>
   </div>
 </div>
 
-<div id="chartWrap">
-  <canvas id="speedChart" width="1100" height="460"></canvas>
-</div>
+<div id="mainApp">
+    <h1>Central Railway Electrical (TRO) Branch Bhusawal</h1>
+    <h2>Speed vs Distance — Station-wise Braking Pattern</h2>
 
-<table id="resultsTable">
-  <thead></thead>
-  <tbody></tbody>
-</table>
+    <div class="controls">
+      <div class="row">
+        <label>Select CSV files (max 20):</label>
+        <input type="file" id="csvFiles" accept=".csv" multiple />
+      </div>
+
+      <div class="row">
+        <label>Station & Direction:</label>
+        <select id="stationSelect">
+            <option value="">-- Select Station --</option>
+        </select>
+        <select id="dirSelect">
+            <option value="UP">UP</option>
+            <option value="DN">DN</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label>Backtrack Distance (m):</label>
+        <input type="number" id="backDistInput" placeholder="1500 or 1250" />
+      </div>
+
+      <div class="row">
+        <label>User Signal 1 (m & name):</label>
+        <input type="number" id="userSig1Dist" placeholder="e.g. 800">
+        <input type="text" id="userSig1Name" placeholder="Outer">
+      </div>
+
+      <div class="row">
+        <label>User Signal 2 (m & name):</label>
+        <input type="number" id="userSig2Dist" placeholder="e.g. 400">
+        <input type="text" id="userSig2Name" placeholder="Home">
+      </div>
+
+      <div class="row">
+        <label>Marker Lines (m):</label>
+        <input type="text" id="markerInput" value="750,500,250,110,20">
+      </div>
+
+      <div class="row">
+        <button id="plotBtn">Plot Graph & Table</button>
+        <button id="pdfBtn" class="secondary" style="background:#008000">Export PDF</button>
+        <button id="excelSummaryBtn" class="secondary" style="background:#6a00ff">Export Summary Excel</button>
+      </div>
+    </div>
+
+    <div id="chartWrap">
+      <canvas id="speedChart" width="1100" height="460"></canvas>
+    </div>
+
+    <table id="resultsTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+</div>
 
 <script>
-/* ---------------- FULL STATION DATABASE RESTORED ---------------- */
+/* ---------------- SPLASH SCREEN TIMER ---------------- */
+let timeLeft = 30;
+function hideSplash() {
+    const splash = document.getElementById('splashScreen');
+    const main = document.getElementById('mainApp');
+    splash.style.opacity = '0';
+    main.style.display = 'block'; // Show app
+    setTimeout(() => {
+        splash.style.display = 'none';
+    }, 800);
+}
+
+const splashInterval = setInterval(() => {
+    timeLeft--;
+    const secSpan = document.getElementById('seconds');
+    if(secSpan) secSpan.innerText = timeLeft;
+    if(timeLeft <= 0) {
+        clearInterval(splashInterval);
+        hideSplash();
+    }
+}, 1000);
+
+/* ---------------- STATION DATABASE (Latest) ---------------- */
 const STATION_DB = {
   "IGP": { "UP": { "sig1": { "dist": 1980, "name": "I/Home" }, "sig2": { "dist": 1100, "name": "R/Home" }, "defaultBacktrack": 2000 } },
   "NK": {
-    "DN": { "sig1": { "dist": 1893, "name": "Home" }, "sig2": { "dist": 1048, "name": "R/Home" }, "defaultBacktrack": 2000 },
+    "DN": { "sig1": { "dist": 1790, "name": "Home" }, "sig2": { "dist": 1048, "name": "R/Home" }, "defaultBacktrack": 2000 },
     "UP": { "sig1": { "dist": 1739, "name": "Home" }, "sig2": { "dist": 733, "name": "R/Home" }, "defaultBacktrack": 2000 }
   },
   "NR": {
@@ -115,7 +179,7 @@ const STATION_DB = {
   },
   "MMR": {
     "DN": { "sig1": { "dist": 1725, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 },
-    "UP": { "sig1": { "dist": 1701, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 }
+    "UP": { "sig1": { "dist": 1650, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 }
   },
   "NGN": {
     "DN": { "sig1": { "dist": 1162, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
@@ -380,7 +444,7 @@ pdfBtn.onclick = async ()=>{
   const dir = dirSelect.value;
 
   pdf.setFontSize(16); pdf.setTextColor(139, 0, 0); pdf.setFont(undefined, 'bold');
-  pdf.text(`Central RailwayTRO Bhusawal - Braking Analysis: ${stn} (${dir})`, margin, 30);
+  pdf.text(`Central Railway TRO Bhusawal - Braking Analysis: ${stn} (${dir})`, margin, 30);
   pdf.setFontSize(10); pdf.setTextColor(0); pdf.setFont(undefined, 'normal');
   pdf.text(`Report Generated On: ${dateStr}`, margin, 45);
 
@@ -435,5 +499,4 @@ excelSummaryBtn.onclick = () => {
 };
 </script>
 </body>
-
 </html>
