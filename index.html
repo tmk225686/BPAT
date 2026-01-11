@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Speed vs Distance — Multi-Train Analysis</title>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  body{font-family:Arial,sans-serif;margin:10px;background:#fff;color:#000}
+  h1{text-align:center;margin-bottom:10px;color: #8b0000;font-weight: bold;}  
+  h2{text-align:center;margin-bottom:10px}
+  .controls{
+    width:96%;max-width:1200px;margin:10px auto;background:#eef3fb;
+    padding:12px;border-radius:8px;border:1px solid #cdd6e4
+  }
+  .row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+  .row label{width:170px;font-weight:600}
+  .row input[type="text"],.row input[type="number"],.row input[type="file"], select{
+    flex:1;min-width:160px;padding:6px;border-radius:5px;border:1px solid #bbb
+  }
+  button{
+    padding:8px 14px;border-radius:5px;border:none;
+    background:#0066bf;color:#fff;cursor:pointer
+  }
+  button.secondary{background:#555}
+  #chartWrap{width:96%;max-width:1100px;margin:16px auto}
+  canvas{background:#fff;border:1px solid #999;border-radius:6px}
+
+  table{width:96%;max-width:1100px;margin:18px auto;border-collapse:collapse;font-size:14px}
+  th,td{border:1px solid #333;padding:6px 8px;text-align:center}
+  th{background:#007bff;color:#fff}
+  .overspeed{color: #ff0000; font-weight: bold; background-color: #ffeaea;}
+</style>
+</head>
+<body>
+
+<h1>Central Railway Electrical (TRO) Branch Bhusawal</h1>
+<h2>Speed vs Distance — Station-wise Braking Pattern</h2>
+
+<div class="controls">
+  <div class="row">
+    <label>Select CSV files (max 20):</label>
+    <input type="file" id="csvFiles" accept=".csv" multiple />
+  </div>
+
+  <div class="row">
+    <label>Station & Direction:</label>
+    <select id="stationSelect">
+        <option value="">-- Select Station --</option>
+    </select>
+    <select id="dirSelect">
+        <option value="UP">UP</option>
+        <option value="DN">DN</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label>Backtrack Distance (m):</label>
+    <input type="number" id="backDistInput" placeholder="1500 or 1250" />
+  </div>
+
+  <div class="row">
+    <label>User Signal 1 (m & name):</label>
+    <input type="number" id="userSig1Dist" placeholder="e.g. 800">
+    <input type="text" id="userSig1Name" placeholder="Outer">
+  </div>
+
+  <div class="row">
+    <label>User Signal 2 (m & name):</label>
+    <input type="number" id="userSig2Dist" placeholder="e.g. 400">
+    <input type="text" id="userSig2Name" placeholder="Home">
+  </div>
+
+  <div class="row">
+    <label>Marker Lines (m):</label>
+    <input type="text" id="markerInput" value="1000,750,500,250,110,20">
+  </div>
+
+  <div class="row">
+    <button id="plotBtn">Plot Graph & Table</button>
+    <button id="pdfBtn" class="secondary" style="background:#008000">Export PDF</button>
+    <button id="excelSummaryBtn" class="secondary" style="background:#6a00ff">Export Summary Excel</button>
+  </div>
+</div>
+
+<div id="chartWrap">
+  <canvas id="speedChart" width="1100" height="460"></canvas>
+</div>
+
+<table id="resultsTable">
+  <thead></thead>
+  <tbody></tbody>
+</table>
+
+<script>
+/* ---------------- FULL STATION DATABASE RESTORED ---------------- */
+const STATION_DB = {
+  "IGP": { "UP": { "sig1": { "dist": 1980, "name": "I/Home" }, "sig2": { "dist": 1100, "name": "R/Home" }, "defaultBacktrack": 2000 } },
+  "NK": {
+    "DN": { "sig1": { "dist": 1893, "name": "Home" }, "sig2": { "dist": 1048, "name": "R/Home" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1739, "name": "Home" }, "sig2": { "dist": 733, "name": "R/Home" }, "defaultBacktrack": 2000 }
+  },
+  "NR": {
+    "DN": { "sig1": { "dist": 1287, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1583, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 }
+  },
+  "LS": {
+    "DN": { "sig1": { "dist": 1147, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1102, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 }
+  },
+  "MMR": {
+    "DN": { "sig1": { "dist": 1725, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 },
+    "UP": { "sig1": { "dist": 1701, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 }
+  },
+  "NGN": {
+    "DN": { "sig1": { "dist": 1162, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1892, "name": "Home" }, "sig2": { "dist": 934, "name": "I/Home" }, "defaultBacktrack": 1500 }
+  },
+  "CSN": {
+    "DN": { "sig1": { "dist": 2548, "name": "Home" }, "sig2": { "dist": 898, "name": "R/Home" }, "defaultBacktrack": 2500 },
+    "UP": { "sig1": { "dist": 1562, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 }
+  },
+  "PC": {
+    "DN": { "sig1": { "dist": 1432, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 2166, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 3000 }
+  },
+  "JL": {
+    "DN": { "sig1": { "dist": 1332, "name": "Home" }, "sig2": { "dist": 879, "name": "I/Home" }, "defaultBacktrack": 1500 },
+    "UP": { "sig1": { "dist": 1212, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 }
+  },
+  "BSL": { "DN": { "sig1": { "dist": 1961, "name": "Home" }, "sig2": { "dist": 1000, "name": "R/Home" }, "defaultBacktrack": 1500 } },
+  "BAU": {
+    "DN": { "sig1": { "dist": 1896, "name": "Home" }, "sig2": { "dist": 680, "name": "I/Str" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1036, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 }
+  },
+  "NPNR": {
+    "DN": { "sig1": { "dist": 1069, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1119, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 }
+  },
+  "KNW": { "DN": { "sig1": { "dist": 2058, "name": "Home" }, "sig2": { "dist": 951, "name": "R/Home" }, "defaultBacktrack": 2000 } },
+  "MKU": {
+    "DN": { "sig1": { "dist": 1212, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1154, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 }
+  },
+  "NN": {
+    "DN": { "sig1": { "dist": 1097, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1115, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 }
+  },
+  "SEG": {
+    "DN": { "sig1": { "dist": 1273, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1523, "name": "Home" }, "sig2": { "dist": 1051, "name": "R/Home" }, "defaultBacktrack": 2000 }
+  },
+  "AK": {
+    "DN": { "sig1": { "dist": 1666, "name": "Home" }, "sig2": { "dist": 1088, "name": "R/Home" }, "defaultBacktrack": 2000 },
+    "UP": { "sig1": { "dist": 1515, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 }
+  },
+  "MZR": {
+    "DN": { "sig1": { "dist": 1541, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2500 },
+    "UP": { "sig1": { "dist": 1115, "name": "Home" }, "sig2": { "dist": 0, "name": "None" }, "defaultBacktrack": 2000 }
+  },
+  "BD": { "DN": { "sig1": { "dist": 1223, "name": "Home" }, "sig2": { "dist": 835, "name": "I/Home" }, "defaultBacktrack": 1500 } }
+};
+
+const COLORS = ["#1f77b4","#d62728","#2ca02c","#9467bd","#ff7f0e", "#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"];
+let chart = null;
+
+const stationSelect = document.getElementById('stationSelect');
+const dirSelect = document.getElementById('dirSelect');
+
+Object.keys(STATION_DB).sort().forEach(stn => {
+  let opt = document.createElement('option');
+  opt.value = stn; opt.textContent = stn;
+  stationSelect.appendChild(opt);
+});
+
+function autoFillSignals() {
+  const stn = stationSelect.value;
+  const dir = dirSelect.value;
+  if (stn && STATION_DB[stn] && STATION_DB[stn][dir]) {
+    const data = STATION_DB[stn][dir];
+    document.getElementById('userSig1Dist').value = data.sig1.dist;
+    document.getElementById('userSig1Name').value = data.sig1.name;
+    document.getElementById('userSig2Dist').value = data.sig2.dist;
+    document.getElementById('userSig2Name').value = data.sig2.name;
+    document.getElementById('backDistInput').value = data.defaultBacktrack;
+  }
+}
+stationSelect.onchange = autoFillSignals;
+dirSelect.onchange = autoFillSignals;
+
+function normalize(h){ return (h||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+function findCol(headers, target){
+  const t = normalize(target);
+  return headers.find(h => normalize(h)===t) || null;
+}
+function trainInfo(name){
+  const parts=name.replace(/\.[^.]+$/,"").split("_");
+  return {train:parts[0]||name, loco:parts[1]||"-", parts};
+}
+function interp(arr, dist){
+  if(!arr.length) return "-";
+  if(dist<=arr[0].d) return arr[0].speed.toFixed(1);
+  if(dist>=arr.at(-1).d) return arr.at(-1).speed.toFixed(1);
+  for(let i=1;i<arr.length;i++){
+    if(arr[i].d >= dist){
+      const p0=arr[i-1], p1=arr[i];
+      const r=(dist-p0.d)/(p1.d-p0.d);
+      return (p0.speed+r*(p1.speed-p0.speed)).toFixed(1);
+    }
+  }
+  return "-";
+}
+
+const markerPlugin = {
+  id:"markerPlugin",
+  afterDraw(chart,args,opt){
+    if(!opt || !opt.list) return;
+    const {ctx, scales:{x,y}, chartArea:{top,bottom}} = chart;
+    opt.list.forEach((mObj)=>{
+      const px = x.getPixelForValue(mObj.dist);
+      if(isNaN(px)) return;
+      ctx.save();
+      if(mObj.isSignal) {
+          ctx.setLineDash([5, 5]); ctx.strokeStyle = "#d04423"; ctx.lineWidth = 2.5;
+      } else {
+          ctx.setLineDash([8, 4]); ctx.strokeStyle = "#888"; ctx.lineWidth = 1.2;
+      }
+      ctx.beginPath(); ctx.moveTo(px,top); ctx.lineTo(px,bottom); ctx.stroke();
+      ctx.setLineDash([]); ctx.font = mObj.isSignal ? "bold 13px Arial" : "11px Arial";
+      ctx.fillStyle = ctx.strokeStyle; ctx.textAlign = "center";
+      let label = mObj.dist + "m";
+      if(mObj.name) label = mObj.name + " (" + label + ")";
+      ctx.fillText(label, px, top - 8); ctx.restore();
+    });
+  }
+};
+Chart.register(markerPlugin);
+
+const signalPlugin = {
+  id:"signalPlugin",
+  afterDatasetsDraw(chart,args,opt){
+    const {ctx, scales:{x,y}} = chart;
+    const baseY=y.getPixelForValue(0);
+    function drawSignalAt(ctx, xScale, baseY, dist, aspect){
+      const xPos = xScale.getPixelForValue(dist);
+      if(isNaN(xPos)) return;
+      const poleTop = baseY - 20;
+      ctx.save(); ctx.strokeStyle="#000"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(xPos,baseY); ctx.lineTo(xPos,poleTop); ctx.stroke();
+      ctx.fillStyle="#222"; ctx.fillRect(xPos-9, poleTop-65, 18, 65);
+      const OFF = "#333", RED = "#ff3333", YEL = "#ffdd33";
+      let colors = [OFF, OFF, OFF, OFF]; 
+      if(aspect === 'red') colors = [RED, OFF, OFF, OFF]; 
+      else if(aspect === 'yellow') colors = [OFF, YEL, OFF, OFF]; 
+      else if(aspect === 'double-yellow') colors = [OFF, YEL, OFF, YEL];
+      colors.forEach((c, i) => {
+        ctx.fillStyle = c; if(c !== OFF) { ctx.shadowBlur = 8; ctx.shadowColor = c; }
+        ctx.beginPath(); ctx.arc(xPos, (poleTop - 10) - (i * 15), 5, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.restore();
+    }
+    drawSignalAt(ctx, x, baseY, -10, 'red');
+    if(opt && opt.signals && opt.signals.length > 0) {
+       const sorted = [...opt.signals].sort((a,b) => b.dist - a.dist);
+       sorted.forEach((s, idx) => {
+          let aspect = (sorted.length === 2 && idx === 0) ? 'double-yellow' : 'yellow';
+          drawSignalAt(ctx, x, baseY, s.dist, aspect);
+       });
+    }
+  }
+};
+Chart.register(signalPlugin);
+
+async function run(){
+  const files=[...csvFiles.files].slice(0,20);
+  const st=stationSelect.value.trim().toLowerCase();
+  const dir=dirSelect.value;
+  const back=+backDistInput.value;
+  if(!files.length || !st){alert("Select files and station."); return;}
+
+  const s1Dist = +userSig1Dist.value;
+  const s2Dist = +userSig2Dist.value;
+  const sigs=[];
+  if(s1Dist > 0) sigs.push({dist: s1Dist, name: userSig1Name.value.trim()});
+  if(s2Dist > 0) sigs.push({dist: s2Dist, name: userSig2Name.value.trim()});
+
+  let nearestSignalDist = (sigs.length > 0) ? Math.min(...sigs.map(s => s.dist)) : -1;
+
+  let mArr = markerInput.value.split(",").map(v=>+v.trim()).filter(v=>!isNaN(v) && v>=0);
+  let allMarkers = mArr.map(m => ({dist: m, isSignal: false}));
+  sigs.forEach(s => {
+      let existing = allMarkers.find(m => m.dist === s.dist);
+      if(existing) { existing.isSignal = true; existing.name = s.name; }
+      else { allMarkers.push({dist: s.dist, name: s.name, isSignal: true}); }
+  });
+  allMarkers.sort((a,b) => b.dist - a.dist);
+  const finalDistList = allMarkers.map(m => m.dist);
+
+  const datasets=[], tableData=[];
+
+  for(let i=0;i<files.length;i++){
+    const info=trainInfo(files[i].name);
+    const data = await new Promise(res => { 
+        Papa.parse(files[i], {header:true, skipEmptyLines:true, complete:r=>res(r.data)}); 
+    });
+    if(!data.length)continue;
+    const headers=Object.keys(data[0]);
+    const sc=findCol(headers,"speed") || headers.find(h=>normalize(h).includes("speed"));
+    const dc=findCol(headers,"distfromspeed") || headers.find(h=>normalize(h).includes("distfromspeed") || normalize(h).includes("dist"));
+    const stc=findCol(headers,"last/curr stationcode") || headers.find(h=>normalize(h).includes("stationcode") || normalize(h).includes("stn"));
+    if(!sc||!dc||!stc)continue;
+
+    const rows=data.map(r=>({ speed:+r[sc], dist:+r[dc], stn:(r[stc]||"").toString().trim().toLowerCase() }))
+                   .filter(r=>!isNaN(r.speed)&&!isNaN(r.dist));
+    let idx=-1;
+    for(let j=0;j<rows.length;j++){
+      if(rows[j].stn===st && rows[j].speed===0) idx=j;
+      else if(idx!==-1) break;
+    }
+    if(idx===-1)continue;
+    let cum=0, pts=[];
+    for(let j=idx;j>0;j--){
+      cum+=rows[j].dist; if(cum>back)break;
+      pts.push({d:cum,speed:rows[j].speed});
+    }
+    pts.sort((a,b)=>a.d-b.d);
+
+    datasets.push({
+      label: info.train,
+      data: pts.map(p => ({ x: p.d, y: p.speed })),
+      rawPoints: JSON.parse(JSON.stringify(pts)),
+      borderColor: COLORS[i % COLORS.length],
+      backgroundColor: COLORS[i % COLORS.length],
+      pointRadius: 0, borderWidth: 2, tension: 0.3, fileName: files[i].name
+    });
+
+    const vals = finalDistList.map(d => {
+        const speed = interp(pts, d);
+        return { dist: d, speed: speed, isOverspeed: (d === nearestSignalDist && speed !== "-" && parseFloat(speed) > 60) };
+    });
+    tableData.push({ sr:i+1, train:info.train, loco:info.loco, vals: vals });
+  }
+
+  if(chart)chart.destroy();
+  chart=new Chart(speedChart.getContext("2d"),{
+    type:"line", data:{datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      layout: { padding: { top: 25 } },
+      scales:{
+        x:{type:"linear",reverse:true,min:-20,title:{display:true,text:"Distance (m)"}},
+        y:{min:0,title:{display:true,text:"Speed (km/h)"}}
+      },
+      plugins:{ markerPlugin:{ list:allMarkers }, signalPlugin:{ signals:sigs } }
+    }
+  });
+
+  resultsTable.querySelector("thead").innerHTML = `<tr><th>Sr</th><th>Train</th><th>Loco</th>${finalDistList.map(d=>`<th>@${d}m</th>`).join("")}</tr>`;
+  resultsTable.querySelector("tbody").innerHTML = tableData.map(r => {
+      const cells = r.vals.map(v => `<td class="${v.isOverspeed ? 'overspeed' : ''}">${v.speed}</td>`).join("");
+      return `<tr><td>${r.sr}</td><td>${r.train}</td><td>${r.loco}</td>${cells}</tr>`;
+  }).join("");
+}
+
+plotBtn.onclick = run;
+
+/* ---------- PDF EXPORT ---------- */
+pdfBtn.onclick = async ()=>{
+  if(!chart) {alert("Plot graph first.");return;}
+  const {jsPDF} = window.jspdf;
+  const pdf = new jsPDF("l","pt","a4");
+  const margin = 40; const pageW = pdf.internal.pageSize.getWidth();
+  const dateStr = new Date().toLocaleString();
+  const stn = stationSelect.value.toUpperCase();
+  const dir = dirSelect.value;
+
+  pdf.setFontSize(16); pdf.setTextColor(139, 0, 0); pdf.setFont(undefined, 'bold');
+  pdf.text(`Central RailwayTRO Bhusawal - Braking Analysis: ${stn} (${dir})`, margin, 30);
+  pdf.setFontSize(10); pdf.setTextColor(0); pdf.setFont(undefined, 'normal');
+  pdf.text(`Report Generated On: ${dateStr}`, margin, 45);
+
+  pdf.addImage(speedChart.toDataURL("image/png",1.0), "PNG", margin, 60, pageW - margin*2, 300);
+  
+  pdf.addPage();
+  pdf.setFontSize(14); pdf.setTextColor(139, 0, 0); pdf.setFont(undefined, 'bold');
+  pdf.text(`Detailed Speed Data Table - Station: ${stn}`, margin, 35);
+  pdf.setFontSize(10); pdf.setTextColor(0); pdf.setFont(undefined, 'normal');
+  pdf.text(`Report Date: ${dateStr}`, margin, 50);
+
+  const headers = [...resultsTable.querySelectorAll("thead th")].map(th => th.innerText);
+  const rows = [...resultsTable.querySelectorAll("tbody tr")];
+  let y = 85; const rowH = 22; const colW = (pageW - margin*2) / headers.length;
+  
+  pdf.setFillColor(0, 123, 255); pdf.rect(margin, y - 15, pageW - margin*2, rowH, 'F');
+  pdf.setFontSize(9); pdf.setTextColor(255);
+  headers.forEach((h, i) => { 
+      pdf.text(h, margin + (i * colW) + 5, y); 
+      pdf.setDrawColor(200); pdf.rect(margin + (i * colW), y - 15, colW, rowH, 'S'); 
+  });
+  
+  y += rowH; pdf.setTextColor(0);
+  rows.forEach((tr) => {
+      [...tr.children].forEach((td, i) => {
+          const xPos = margin + (i * colW);
+          if(td.classList.contains('overspeed')) { 
+              pdf.setFillColor(255, 234, 234); pdf.rect(xPos, y-15, colW, rowH, 'F'); 
+              pdf.setTextColor(255, 0, 0); pdf.setFont(undefined, 'bold');
+          } else { pdf.setTextColor(0); pdf.setFont(undefined, 'normal'); }
+          pdf.setDrawColor(50); pdf.rect(xPos, y - 15, colW, rowH, 'S'); 
+          pdf.text(td.innerText, xPos + 5, y);
+      });
+      y += rowH; if(y > 540) { pdf.addPage(); y = 60; }
+  });
+  pdf.save(`Braking_Report_${stn}.pdf`);
+};
+
+/* ---------- EXCEL SUMMARY ---------- */
+excelSummaryBtn.onclick = () => {
+  if (!chart) {alert("Plot graph first.");return;}
+  const stn = stationSelect.value.toUpperCase();
+  const rows = [["Distance (m)", ...chart.data.datasets.map(ds => ds.label)]];
+  for (let d = +backDistInput.value; d >= 0; d -= 25) {
+      const r = [d];
+      chart.data.datasets.forEach(ds => r.push(interp(ds.rawPoints || [], d)));
+      rows.push(r);
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Summary");
+  XLSX.writeFile(wb, `Braking_Summary_${stn}.xlsx`);
+};
+</script>
+</body>
+</html>
