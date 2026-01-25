@@ -66,8 +66,8 @@
 <div id="splashScreen">
   <div class="splash-box">
     <h1>Braking Pattern Analysis Tool</h1>
-    <h2>Central Railway, Bhusawal Division</h2>
-    <h3>Electric (TRO) Branch</h3>
+    <h2>Southern Railway Salem Division</h2>
+    <h3>Electrical OP Branch</h3>
     
     <div class="dev-credits">
       <p>Designed and Developed by:</p>
@@ -80,7 +80,7 @@
 </div>
 
 <div id="mainApp">
-    <h1>Central Railway Electrical (TRO) Branch Bhusawal</h1>
+    <h1>Southern Railway Salem Division (Electrical OP)</h1>
     <h2>Speed vs Distance — Station-wise Braking Pattern</h2>
 
     <div class="controls">
@@ -444,7 +444,7 @@ pdfBtn.onclick = async ()=>{
   const dir = dirSelect.value;
 
   pdf.setFontSize(16); pdf.setTextColor(139, 0, 0); pdf.setFont(undefined, 'bold');
-  pdf.text(`Central Railway TRO Bhusawal - Braking Analysis: ${stn} (${dir})`, margin, 30);
+  pdf.text(`Southern Railway Salem Division (Electrical OP) - Braking Analysis: ${stn} (${dir})`, margin, 30);
   pdf.setFontSize(10); pdf.setTextColor(0); pdf.setFont(undefined, 'normal');
   pdf.text(`Report Generated On: ${dateStr}`, margin, 45);
 
